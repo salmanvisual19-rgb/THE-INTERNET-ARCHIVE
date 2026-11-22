@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">Internet Archive</string>
+    <string name="intro_connecting">CONNECTING TO THE INTERNET...</string>
+    <string name="intro_headline">INTERNET NEVER\nFORGETS.</string>
+    <string name="intro_skip">SKIP INTRO</string>
+    <string name="hero_headline">THE INTERNET\nIS A MUSEUM.</string>
+    <string name="hero_subheadline">Every meme has a story. Every trend has a history.</string>
+    <string name="hero_cta">EXPLORE THE ARCHIVE</string>
+    <string name="footer_headline">THE INTERNET NEVER FORGETS.</string>
+    <string name="footer_sub">An archive built for the culture.</string>
+    <string name="footer_credit_label">Created &amp; Developed by</string>
+    <string name="footer_creator">SALMAN PATHAAN</string>
+    <string name="auth_title">ENTER THE ARCHIVE</string>
+    <string name="auth_subtitle">Sign in with Google to sync your favorite cultural artifacts, cast Trend Battle votes, and submit discoveries to the museum.</string>
+    <string name="auth_cta">Sign in with Google</string>
+    <string name="nav_explore">Explore</string>
+    <string name="nav_legends">Legends</string>
+    <string name="nav_memes">Memes</string>
+    <string name="nav_sound">Sound Lab</string>
+    <string name="nav_timeline">Timeline</string>
+    <string name="nav_community">Community</string>
+</resources>

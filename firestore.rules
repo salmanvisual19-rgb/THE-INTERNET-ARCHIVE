@@ -1,0 +1,209 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HELPERS ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email_verified == true && request.auth.token.email == 'salmankheri9@gmail.com')
+      );
+    }
+
+    // --- VALIDATION HELPERS ---
+    function isValidFavorite(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.itemId is string && isValidId(data.itemId) &&
+             data.itemType in ['legend', 'meme', 'sound'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidBattle(data) {
+      return data.title is string && data.title.size() >= 3 && data.title.size() <= 100 &&
+             data.contenderA is string && data.contenderA.size() >= 2 && data.contenderA.size() <= 60 &&
+             data.contenderB is string && data.contenderB.size() >= 2 && data.contenderB.size() <= 60 &&
+             data.eraTag is string && data.eraTag.size() >= 2 && data.eraTag.size() <= 30 &&
+             data.status == 'active' &&
+             data.votesA is int && data.votesA >= 0 && data.votesA <= 10000000 &&
+             data.votesB is int && data.votesB >= 0 && data.votesB <= 10000000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVote(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.battleId is string && isValidId(data.battleId) &&
+             data.choice in ['A', 'B'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidSubmission(data) {
+      return data.userId is string && data.userId.size() <= 128 &&
+             data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 60 &&
+             data.title is string && data.title.size() >= 3 && data.title.size() <= 80 &&
+             data.eraYear is int && data.eraYear >= 1990 && data.eraYear <= 2026 &&
+             data.category in ['Meme', 'Legend', 'Sound', 'Lost Internet', 'Trend'] &&
+             data.story is string && data.story.size() >= 10 && data.story.size() <= 500 &&
+             (!('quote' in data) || (data.quote is string && data.quote.size() <= 200)) &&
+             data.status in ['pending', 'approved', 'rejected'] &&
+             (!('curatorNote' in data) || (data.curatorNote is string && data.curatorNote.size() <= 240)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    // --- 1. USER FAVORITES ---
+    match /users/{userId}/favorites/{itemId} {
+      allow get, list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(itemId) &&
+                       incoming().keys().hasAll(['userId', 'itemId', 'itemType', 'createdAt']) &&
+                       incoming().keys().hasOnly(['userId', 'itemId', 'itemType', 'createdAt']) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().itemId == itemId &&
+                       isValidFavorite(incoming());
+
+      allow update: if false;
+
+      allow delete: if isSignedIn() &&
+                       request.auth.uid == userId &&
+                       isValidId(itemId);
+    }
+
+    // --- 2. TREND BATTLES & ATOMIC VOTES ---
+    match /battles/{battleId} {
+      allow get: if isSignedIn() && isValidId(battleId);
+      allow list: if isSignedIn() && resource.data.status == 'active';
+
+      // Initial seeding by any signed-in client is permitted only with 0 votes
+      allow create: if isSignedIn() &&
+                       isValidId(battleId) &&
+                       incoming().keys().hasAll(['title', 'contenderA', 'contenderB', 'eraTag', 'status', 'votesA', 'votesB', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['title', 'contenderA', 'contenderB', 'eraTag', 'status', 'votesA', 'votesB', 'createdAt', 'updatedAt']) &&
+                       incoming().votesA == 0 &&
+                       incoming().votesB == 0 &&
+                       isValidBattle(incoming());
+
+      // Atomic vote update: requires creating /battles/{battleId}/votes/{uid} in the same batch
+      allow update: if isSignedIn() &&
+                       isValidId(battleId) &&
+                       isValidBattle(incoming()) &&
+                       incoming().title == existing().title &&
+                       incoming().contenderA == existing().contenderA &&
+                       incoming().contenderB == existing().contenderB &&
+                       incoming().eraTag == existing().eraTag &&
+                       incoming().status == existing().status &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['votesA', 'votesB', 'updatedAt']) &&
+                       !exists(/databases/$(database)/documents/battles/$(battleId)/votes/$(request.auth.uid)) &&
+                       existsAfter(/databases/$(database)/documents/battles/$(battleId)/votes/$(request.auth.uid)) &&
+                       (
+                         (
+                           getAfter(/databases/$(database)/documents/battles/$(battleId)/votes/$(request.auth.uid)).data.choice == 'A' &&
+                           incoming().votesA == existing().votesA + 1 &&
+                           incoming().votesB == existing().votesB
+                         ) ||
+                         (
+                           getAfter(/databases/$(database)/documents/battles/$(battleId)/votes/$(request.auth.uid)).data.choice == 'B' &&
+                           incoming().votesB == existing().votesB + 1 &&
+                           incoming().votesA == existing().votesA
+                         )
+                       );
+
+      allow delete: if false;
+
+      match /votes/{voteUserId} {
+        allow get: if isSignedIn() && request.auth.uid == voteUserId && isValidId(battleId);
+        allow list: if isSignedIn() && request.auth.uid == voteUserId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(battleId) &&
+                         request.auth.uid == voteUserId &&
+                         incoming().keys().hasAll(['userId', 'battleId', 'choice', 'createdAt']) &&
+                         incoming().keys().hasOnly(['userId', 'battleId', 'choice', 'createdAt']) &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().battleId == battleId &&
+                         !exists(/databases/$(database)/documents/battles/$(battleId)/votes/$(voteUserId)) &&
+                         existsAfter(/databases/$(database)/documents/battles/$(battleId)) &&
+                         isValidVote(incoming());
+
+        allow update, delete: if false;
+      }
+    }
+
+    // --- 3. COMMUNITY SUBMISSIONS & CURATOR MODERATION ---
+    match /submissions/{submissionId} {
+      allow get: if isSignedIn() &&
+                    isValidId(submissionId) &&
+                    (existing().status == 'approved' || existing().userId == request.auth.uid || isAdmin());
+
+      allow list: if isSignedIn() &&
+                     (resource.data.status == 'approved' || resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn() &&
+                       isValidId(submissionId) &&
+                       incoming().keys().hasAll(['userId', 'authorName', 'title', 'eraYear', 'category', 'story', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'authorName', 'title', 'eraYear', 'category', 'story', 'quote', 'status', 'curatorNote', 'createdAt', 'updatedAt']) &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().status == 'pending' &&
+                       !('curatorNote' in incoming()) &&
+                       isValidSubmission(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(submissionId) &&
+                       isValidSubmission(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Tier 1: Curator Admin moderation action
+                         (
+                           isAdmin() &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['status', 'curatorNote', 'updatedAt'])
+                         ) ||
+                         // Tier 2: Author editing their own still-pending submission (cannot self-approve)
+                         (
+                           existing().userId == request.auth.uid &&
+                           existing().status == 'pending' &&
+                           incoming().status == 'pending' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['title', 'eraYear', 'category', 'story', 'quote', 'updatedAt'])
+                         )
+                       );
+
+      allow delete: if isSignedIn() &&
+                       isValidId(submissionId) &&
+                       (
+                         (existing().userId == request.auth.uid && existing().status == 'pending') ||
+                         isAdmin()
+                       );
+    }
+
+    // --- 4. ADMINS ---
+    match /admins/{adminUid} {
+      allow get: if isSignedIn() && request.auth.uid == adminUid;
+      allow list, write: if false;
+    }
+  }
+}

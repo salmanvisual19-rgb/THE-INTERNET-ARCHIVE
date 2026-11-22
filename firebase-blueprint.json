@@ -1,0 +1,193 @@
+{
+  "entities": {
+    "UserFavorite": {
+      "title": "UserFavorite",
+      "description": "A user's bookmarked exhibit item (Viral Legend, Meme Artifact, or Sound Artifact).",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated owner UID."
+        },
+        "itemId": {
+          "type": "string",
+          "description": "Catalog artifact identifier."
+        },
+        "itemType": {
+          "type": "string",
+          "enum": ["legend", "meme", "sound"],
+          "description": "Archive exhibit category."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp written via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "itemId", "itemType", "createdAt"]
+    },
+    "TrendBattle": {
+      "title": "TrendBattle",
+      "description": "Head-to-head internet culture matchup with atomic vote counts.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Matchup title."
+        },
+        "contenderA": {
+          "type": "string",
+          "description": "Name of Contender A."
+        },
+        "contenderB": {
+          "type": "string",
+          "description": "Name of Contender B."
+        },
+        "eraTag": {
+          "type": "string",
+          "description": "Era classification label."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active"],
+          "description": "Battle visibility status."
+        },
+        "votesA": {
+          "type": "integer",
+          "description": "Vote tally for Contender A."
+        },
+        "votesB": {
+          "type": "integer",
+          "description": "Vote tally for Contender B."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp written via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["title", "contenderA", "contenderB", "eraTag", "status", "votesA", "votesB", "createdAt", "updatedAt"]
+    },
+    "BattleVote": {
+      "title": "BattleVote",
+      "description": "Per-user single vote record for a Trend Battle.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Authenticated voter UID."
+        },
+        "battleId": {
+          "type": "string",
+          "description": "Parent TrendBattle document ID."
+        },
+        "choice": {
+          "type": "string",
+          "enum": ["A", "B"],
+          "description": "Voted contender."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp written via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "battleId", "choice", "createdAt"]
+    },
+    "CommunitySubmission": {
+      "title": "CommunitySubmission",
+      "description": "Visitor-submitted internet culture artifact awaiting or cleared by curator moderation.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Submitting user UID."
+        },
+        "authorName": {
+          "type": "string",
+          "description": "Display name of contributor."
+        },
+        "title": {
+          "type": "string",
+          "description": "Artifact title."
+        },
+        "eraYear": {
+          "type": "integer",
+          "description": "Year of internet trend."
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Meme", "Legend", "Sound", "Lost Internet", "Trend"],
+          "description": "Archive category."
+        },
+        "story": {
+          "type": "string",
+          "description": "Origin and cultural significance."
+        },
+        "quote": {
+          "type": "string",
+          "description": "Optional iconic dialogue or tagline."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"],
+          "description": "Moderation workflow status."
+        },
+        "curatorNote": {
+          "type": "string",
+          "description": "Optional curator review remark."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp written via FieldValue.serverTimestamp()."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp updated via FieldValue.serverTimestamp()."
+        }
+      },
+      "required": ["userId", "authorName", "title", "eraYear", "category", "story", "status", "createdAt", "updatedAt"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Curator privilege marker document.",
+      "type": "object",
+      "properties": {
+        "role": {
+          "type": "string",
+          "description": "Role label."
+        }
+      },
+      "required": ["role"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/favorites/{itemId}": {
+      "schema": { "$ref": "#/entities/UserFavorite" },
+      "description": "Per-user favorite exhibit bookmarks."
+    },
+    "/battles/{battleId}": {
+      "schema": { "$ref": "#/entities/TrendBattle" },
+      "description": "Active head-to-head internet trend battles."
+    },
+    "/battles/{battleId}/votes/{voteUserId}": {
+      "schema": { "$ref": "#/entities/BattleVote" },
+      "description": "One-vote-per-user audit document enforcing atomic battle voting."
+    },
+    "/submissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/CommunitySubmission" },
+      "description": "Community artifact submissions with curator moderation workflow."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Authorized archive curator markers."
+    }
+  }
+}

@@ -1,0 +1,39 @@
+
+name: Build Internet Archive APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools;platforms;platforms;build-tools;36.0.0'
+
+      - name: Build Debug APK
+        run: |
+          gradle --version
+          gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Internet-Archive-APK
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
